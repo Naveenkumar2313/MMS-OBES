@@ -11,8 +11,11 @@ export const facultyNavigations = [
   { name: "Marks Entry", path: "/faculty/marks", icon: "edit" },
   { name: "Indirect CO", path: "/faculty/indirect-co", icon: "description" },
   { name: "CO-PO Attainment", path: "/faculty/copo-attainment", icon: "track_changes" },
-  { name: "Reports", path: "/faculty/AttainmentReportPage", icon: "assessment" },
-  { name: "FacultyConfigurationPage", path: "/faculty/configuration", icon: "settings" }
+  // Renamed & Updated path for clarity
+  { name: "Course Reports", path: "/faculty/course-reports", icon: "assessment" }, 
+  // Added Student Reports
+  { name: "Student Reports", path: "/faculty/student-reports", icon: "people" }, 
+  { name: "Configuration", path: "/faculty/configuration", icon: "settings" }
 ];
 
 // Navigation items for ADMIN role

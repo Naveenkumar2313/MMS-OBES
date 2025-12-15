@@ -1,90 +1,149 @@
+// src/app/views/marks-management/Faculty/ArticulationMatrixPage.jsx
 import React, { useState, useMemo, useEffect } from 'react';
-import { courses as mockCourses, pos as mockPos, psos as mockPsos, articulationMatrix as mockArticulationMatrix } from '../data/mockData';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../shared/Card';
 import { Icons } from '../shared/icons';
 import { useAuth } from 'app/contexts/AuthContext';
+import api from '../../../services/api';
+import { X, AlertCircle, CheckCircle, Trash2 } from 'lucide-react';
 
-const ConfirmationModal = ({ onConfirm, onCancel }) => {
+// --- CUSTOM MODAL COMPONENT ---
+const CustomModal = ({ isOpen, onClose, config }) => {
+    if (!isOpen) return null;
+
+    const { title, message, type, onConfirm, confirmText = "Confirm", confirmColor = "bg-primary-600" } = config;
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 transition-opacity" aria-modal="true" role="dialog">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Confirm Deletion</h3>
-                <div className="mt-2">
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
-                        Are you sure you want to delete this outcome? This will remove all associated CO-PO/PSO mappings across all courses. This action cannot be undone.
-                    </p>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md mx-4 transform transition-all scale-100 overflow-hidden">
+                {/* Header */}
+                <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        {type === 'error' && <AlertCircle className="text-red-500 w-5 h-5" />}
+                        {type === 'success' && <CheckCircle className="text-green-500 w-5 h-5" />}
+                        {type === 'confirm' && <Trash2 className="text-red-500 w-5 h-5" />}
+                        {title}
+                    </h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                        <X className="w-5 h-5" />
+                    </button>
                 </div>
-                <div className="mt-6 flex justify-end space-x-3">
-                    <button
-                        onClick={onCancel}
-                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        onClick={onConfirm}
-                        className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                    >
-                        Delete
-                    </button>
+
+                {/* Body */}
+                <div className="p-6 text-sm text-gray-600 dark:text-gray-300">
+                    {message}
+                </div>
+
+                {/* Footer */}
+                <div className="p-4 border-t dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-gray-900/50">
+                    {type === 'confirm' ? (
+                        <>
+                            <button 
+                                onClick={onClose}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600 dark:hover:bg-gray-600 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={() => { if(onConfirm) onConfirm(); onClose(); }}
+                                className={`px-4 py-2 text-sm font-medium text-white rounded-md shadow-sm transition-colors ${confirmColor} hover:opacity-90`}
+                            >
+                                {confirmText}
+                            </button>
+                        </>
+                    ) : (
+                        <button 
+                            onClick={onClose}
+                            className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 shadow-sm transition-colors"
+                        >
+                            OK
+                        </button>
+                    )}
                 </div>
             </div>
         </div>
     );
 };
 
-
 const ArticulationMatrixPage = () => {
   const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
 
-  const assignedCourses = useMemo(() => {
-    if (!user) return [];
-    return mockCourses.filter(c => c.assignedFacultyId === user.id);
-  }, [user]);
+  // Data States
+  const [courses, setCourses] = useState([]);
+  const [pos, setPos] = useState([]);
+  const [psos, setPsos] = useState([]);
+  const [articulationMatrix, setArticulationMatrix] = useState({});
 
-  // States for current data
-  const [courses, setCourses] = useState(assignedCourses);
-  const [pos, setPos] = useState(mockPos);
-  const [psos, setPsos] = useState(mockPsos);
-  const [articulationMatrix, setArticulationMatrix] = useState(mockArticulationMatrix);
-
-  // States for initial data to compare against for changes
-  const [initialCourses, setInitialCourses] = useState(assignedCourses);
-  const [initialPos, setInitialPos] = useState(mockPos);
-  const [initialPsos, setInitialPsos] = useState(mockPsos);
-  const [initialMatrix, setInitialMatrix] = useState(mockArticulationMatrix);
+  // Comparison States (for dirty check)
+  const [initialData, setInitialData] = useState({ courses: [], matrix: {} });
 
   const [isDirty, setIsDirty] = useState(false);
-  const [selectedCourseId, setSelectedCourseId] = useState(assignedCourses[0]?.id ?? '');
+  const [selectedCourseId, setSelectedCourseId] = useState('');
   const [syllabusFile, setSyllabusFile] = useState(null);
-  const [deleteConfirmation, setDeleteConfirmation] = useState({
-    isOpen: false,
-    outcomeId: null,
-  });
   
-  // Effect to check for changes and update isDirty state
-  useEffect(() => {
-    const coursesChanged = JSON.stringify(courses) !== JSON.stringify(initialCourses);
-    const posChanged = JSON.stringify(pos) !== JSON.stringify(initialPos);
-    const psosChanged = JSON.stringify(psos) !== JSON.stringify(initialPsos);
-    const matrixChanged = JSON.stringify(articulationMatrix) !== JSON.stringify(initialMatrix);
-    
-    setIsDirty(coursesChanged || posChanged || psosChanged || matrixChanged);
-  }, [courses, pos, psos, articulationMatrix, initialCourses, initialPos, initialPsos, initialMatrix]);
+  // UI Modal State
+  const [uiModal, setUiModal] = useState({
+    isOpen: false,
+    type: 'alert',
+    title: '',
+    message: '',
+    onConfirm: null
+  });
 
+  const showModal = (type, title, message, onConfirm = null, confirmText = "Confirm", confirmColor = "bg-primary-600") => {
+    setUiModal({ isOpen: true, type, title, message, onConfirm, confirmText, confirmColor });
+  };
 
+  const closeModal = () => setUiModal(prev => ({ ...prev, isOpen: false }));
+
+  // 1. Fetch Data
   useEffect(() => {
-    setCourses(assignedCourses);
-    if (assignedCourses.length > 0 && !assignedCourses.some(c => c.id === selectedCourseId)) {
-        setSelectedCourseId(assignedCourses[0].id);
-    } else if (assignedCourses.length === 0) {
-        setSelectedCourseId('');
-    }
-  }, [assignedCourses, selectedCourseId]);
+      const fetchData = async () => {
+          if (!user) return;
+          try {
+              setLoading(true);
+              const [coursesRes, posRes, psosRes, matrixRes] = await Promise.all([
+                  api.get(`/courses?assignedFacultyId=${user.id}`),
+                  api.get('/pos'),
+                  api.get('/psos'),
+                  api.get('/articulationMatrix')
+              ]);
+
+              setCourses(coursesRes.data);
+              setPos(posRes.data);
+              setPsos(psosRes.data);
+              setArticulationMatrix(matrixRes.data);
+
+              // Set initial state for dirty checking
+              setInitialData({
+                  courses: JSON.stringify(coursesRes.data),
+                  matrix: JSON.stringify(matrixRes.data)
+              });
+
+              if (coursesRes.data.length > 0) {
+                  setSelectedCourseId(coursesRes.data[0].id);
+              }
+          } catch (error) {
+              console.error("Failed to load articulation data", error);
+          } finally {
+              setLoading(false);
+          }
+      };
+
+      fetchData();
+  }, [user]);
+  
+  // 2. Dirty Check
+  useEffect(() => {
+    const coursesChanged = JSON.stringify(courses) !== initialData.courses;
+    const matrixChanged = JSON.stringify(articulationMatrix) !== initialData.matrix;
+    setIsDirty(coursesChanged || matrixChanged);
+  }, [courses, articulationMatrix, initialData]);
 
   const selectedCourse = courses.find(c => c.id === selectedCourseId);
   const allOutcomes = useMemo(() => [...pos, ...psos], [pos, psos]);
 
+  // Calculate Averages
   const outcomeAverages = useMemo(() => {
     if (!selectedCourse) return {};
     const courseMatrix = articulationMatrix[selectedCourse.id];
@@ -94,7 +153,8 @@ const ArticulationMatrixPage = () => {
     allOutcomes.forEach(outcome => {
         let sum = 0;
         let count = 0;
-        selectedCourse.cos.forEach(co => {
+        // Use optional chaining for COs in case they are undefined
+        (selectedCourse.cos || []).forEach(co => {
             const value = courseMatrix[co.id]?.[outcome.id];
             if (value && value > 0) {
                 sum += value;
@@ -106,14 +166,16 @@ const ArticulationMatrixPage = () => {
         }
     });
     return averages;
-}, [selectedCourse, articulationMatrix, allOutcomes]);
+  }, [selectedCourse, articulationMatrix, allOutcomes]);
 
 
+  // Handlers
   const handleMatrixChange = (coId, outcomeId, value) => {
     if (!selectedCourse) return;
 
     const correlation = parseInt(value, 10);
-    const newCorrelation = !isNaN(correlation) ? Math.max(0, Math.min(3, correlation)) : 0;
+    // Allow empty string to clear, otherwise clamp 1-3
+    const newCorrelation = (value === '' || isNaN(correlation)) ? '' : Math.max(1, Math.min(3, correlation));
 
     setArticulationMatrix(prevMatrix => {
         const courseMatrix = prevMatrix[selectedCourse.id] || {};
@@ -143,18 +205,17 @@ const ArticulationMatrixPage = () => {
     const handleGenerateMatrix = () => {
         if (!selectedCourse || !syllabusFile) return;
 
-        // Dummy AI generation logic
+        // Mock AI Generation
         const courseMatrix = {};
-        selectedCourse.cos.forEach(co => {
+        (selectedCourse.cos || []).forEach(co => {
             const coMatrix = {};
-            const numMappings = Math.floor(Math.random() * 4) + 2; // 2 to 5 mappings per CO
-            
+            const numMappings = Math.floor(Math.random() * 4) + 2;
             const shuffledOutcomes = [...allOutcomes].sort(() => 0.5 - Math.random());
 
             for (let i = 0; i < numMappings; i++) {
                 if (i < shuffledOutcomes.length) {
                     const outcome = shuffledOutcomes[i];
-                    coMatrix[outcome.id] = Math.floor(Math.random() * 3) + 1; // Correlation 1, 2, or 3
+                    coMatrix[outcome.id] = Math.floor(Math.random() * 3) + 1;
                 }
             }
             courseMatrix[co.id] = coMatrix;
@@ -166,95 +227,93 @@ const ArticulationMatrixPage = () => {
         }));
         
         setSyllabusFile(null);
-        const fileInput = document.getElementById('syllabus-upload');
-        if (fileInput) fileInput.value = '';
+        showModal('success', 'AI Generation Complete', 'The articulation matrix has been populated based on the uploaded syllabus.');
     };
 
   const handleAddCo = () => {
     if (!selectedCourse) return;
-    const newCoNumber = selectedCourse.cos.length > 0 ? Math.max(...selectedCourse.cos.map(co => parseInt(co.id.split('.')[1]))) + 1 : 1;
+    const currentCos = selectedCourse.cos || [];
+    const nextNum = currentCos.length + 1;
+    
+    const newCoId = `${selectedCourse.id}.${nextNum}`; 
     
     const newCo = {
-        id: `${selectedCourse.id}.${newCoNumber}`,
+        id: newCoId,
         description: 'New Course Outcome',
-        kLevel: 'Kx'
+        kLevel: 'K1'
     };
 
     const newCourses = courses.map(course => 
-        course.id === selectedCourseId ? { ...course, cos: [...course.cos, newCo] } : course
+        course.id === selectedCourseId ? { ...course, cos: [...currentCos, newCo] } : course
     );
     setCourses(newCourses);
   };
   
   const handleDeleteCo = (coId) => {
-    if (!selectedCourse) return;
-    const newCourses = courses.map(course => 
-        course.id === selectedCourseId ? { ...course, cos: course.cos.filter(co => co.id !== coId) } : course
-    );
-    setCourses(newCourses);
-
-    const newMatrix = { ...articulationMatrix };
-    if (newMatrix[selectedCourseId] && newMatrix[selectedCourseId][coId]) {
-        delete newMatrix[selectedCourseId][coId];
-        setArticulationMatrix(newMatrix);
-    }
+      showModal(
+          'confirm',
+          'Delete Course Outcome?',
+          'Are you sure you want to delete this outcome? This will remove all associated CO-PO/PSO mappings. This action cannot be undone.',
+          () => confirmDelete(coId),
+          'Delete',
+          'bg-red-600'
+      );
   };
 
-  const handleAddPo = () => {
-    const newPoId = `PO${pos.length + 1}`;
-    setPos([...pos, { id: newPoId, description: 'New Program Outcome' }]);
-  };
-  
-  const handleAddPso = () => {
-    const newPsoId = `PSO${psos.length + 1}`;
-    setPsos([...psos, { id: newPsoId, description: 'New Program Specific Outcome' }]);
-  };
+  const confirmDelete = async (outcomeId) => {
+    if (selectedCourse) {
+        // 1. Remove from Courses state
+        const newCourses = courses.map(course => 
+            course.id === selectedCourseId ? { ...course, cos: course.cos.filter(co => co.id !== outcomeId) } : course
+        );
+        setCourses(newCourses);
 
-  const requestDeleteOutcome = (outcomeId) => {
-    setDeleteConfirmation({ isOpen: true, outcomeId });
-  };
-
-  const confirmDeleteOutcome = () => {
-    const { outcomeId } = deleteConfirmation;
-    if (!outcomeId) return;
-
-    if (outcomeId.startsWith('PO')) {
-        setPos(prev => prev.filter(p => p.id !== outcomeId));
-    } else {
-        setPsos(prev => prev.filter(p => p.id !== outcomeId));
-    }
-
-    const newMatrix = { ...articulationMatrix };
-    Object.keys(newMatrix).forEach(courseId => {
-        Object.keys(newMatrix[courseId]).forEach(coId => {
-            if (newMatrix[courseId][coId][outcomeId] !== undefined) {
-                delete newMatrix[courseId][coId][outcomeId];
+        // 2. Remove from Matrix state
+        setArticulationMatrix(prev => {
+            const newMatrix = { ...prev };
+            if (newMatrix[selectedCourseId]) {
+                const newCourseMatrix = { ...newMatrix[selectedCourseId] };
+                delete newCourseMatrix[outcomeId];
+                newMatrix[selectedCourseId] = newCourseMatrix;
             }
+            return newMatrix;
         });
-    });
-    setArticulationMatrix(newMatrix);
-    
-    cancelDeleteOutcome();
+    }
   };
 
-  const cancelDeleteOutcome = () => {
-    setDeleteConfirmation({ isOpen: false, outcomeId: null });
+  const handleSaveChanges = async () => {
+      if (!selectedCourse) return;
+
+      try {
+          await api.patch(`/courses/${selectedCourse.id}`, {
+              cos: selectedCourse.cos
+          });
+
+          await api.patch(`/articulationMatrix`, {
+              [selectedCourse.id]: articulationMatrix[selectedCourse.id]
+          });
+
+          // Reset dirty state
+          setInitialData({
+              courses: JSON.stringify(courses),
+              matrix: JSON.stringify(articulationMatrix)
+          });
+          
+          showModal('success', 'Saved Successfully', 'Articulation matrix and course outcomes have been saved.');
+      } catch (error) {
+          console.error("Failed to save changes", error);
+          showModal('error', 'Save Failed', 'There was an error saving your changes. Please try again.');
+      }
   };
 
-  const handleSaveChanges = () => {
-    // In a real app, this would be an API call.
-    // Here, we're just updating the 'initial' state to reflect the new saved state.
-    setInitialCourses(courses);
-    setInitialPos(pos);
-    setInitialPsos(psos);
-    setInitialMatrix(articulationMatrix);
-    // isDirty will be set to false by the useEffect hook after this.
-    alert('Changes saved successfully!');
-  };
+  if (loading) return <div className="p-12 text-center text-gray-500">Loading Matrix...</div>;
 
   return (
     <div className="space-y-6">
-      {deleteConfirmation.isOpen && <ConfirmationModal onConfirm={confirmDeleteOutcome} onCancel={cancelDeleteOutcome} />}
+      
+      {/* UI MODAL */}
+      <CustomModal isOpen={uiModal.isOpen} onClose={closeModal} config={uiModal} />
+
       <h1 className="text-3xl font-bold text-gray-800 dark:text-white">CO-PO/PSO Articulation Matrix</h1>
       <Card>
         <CardHeader>
@@ -270,27 +329,19 @@ const ArticulationMatrixPage = () => {
                     value={selectedCourseId}
                     onChange={(e) => {
                         setSelectedCourseId(e.target.value);
-                        setSyllabusFile(null); // Reset file on course change
+                        setSyllabusFile(null); 
                     }}
                     className="block w-full sm:w-64 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    disabled={courses.length === 0}
                   >
-                    {courses.length > 0 ? courses.map(course => (
+                    {courses.map(course => (
                       <option key={course.id} value={course.id}>{course.code} - {course.name}</option>
-                    )) : <option>No courses assigned</option>}
+                    ))}
                   </select>
                    <div className="flex gap-2 justify-end">
-                    <button onClick={handleAddPo} className="flex items-center gap-1 px-3 py-2 text-xs font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700">
-                        <Icons.PlusCircle className="h-4 w-4" /> PO
-                    </button>
-                    <button onClick={handleAddPso} className="flex items-center gap-1 px-3 py-2 text-xs font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700">
-                        <Icons.PlusCircle className="h-4 w-4" /> PSO
-                    </button>
                     <button
                         onClick={handleSaveChanges}
                         disabled={!isDirty}
                         className="px-4 py-2 text-xs font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                        aria-label="Save Changes"
                     >
                         Save Changes
                     </button>
@@ -310,7 +361,7 @@ const ArticulationMatrixPage = () => {
                         <input
                             type="file"
                             id="syllabus-upload"
-                            accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            accept=".pdf,.docx"
                             onChange={handleFileChange}
                             className="hidden"
                         />
@@ -341,12 +392,7 @@ const ArticulationMatrixPage = () => {
                     </th>
                     {allOutcomes.map(outcome => (
                       <th key={outcome.id} scope="col" className="px-3 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                        <div className="flex items-center justify-center gap-1">
-                          <span>{outcome.id}</span>
-                          <button onClick={() => requestDeleteOutcome(outcome.id)} className="text-gray-400 hover:text-red-500 dark:hover:text-red-400">
-                            <Icons.Trash2 className="h-3 w-3" />
-                          </button>
-                        </div>
+                        {outcome.id}
                       </th>
                     ))}
                     <th scope="col" className="px-3 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
@@ -355,10 +401,10 @@ const ArticulationMatrixPage = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                  {selectedCourse.cos.map(co => (
+                  {(selectedCourse.cos || []).map(co => (
                     <tr key={co.id}>
                       <td className="sticky left-0 bg-white dark:bg-gray-800 px-4 py-4 text-sm font-medium text-gray-900 dark:text-white border-r dark:border-gray-600 w-64">
-                        <div className="font-bold">{co.id.split('.')[1]}</div>
+                        <div className="font-bold">{co.id.includes('.') ? co.id.split('.')[1] : co.id}</div>
                         <div className="text-xs text-gray-500 dark:text-gray-400 max-w-xs truncate" title={co.description}>{co.description}</div>
                       </td>
                       {allOutcomes.map(outcome => (
@@ -368,7 +414,6 @@ const ArticulationMatrixPage = () => {
                             value={articulationMatrix[selectedCourse.id]?.[co.id]?.[outcome.id] || ''}
                             onChange={(e) => handleMatrixChange(co.id, outcome.id, e.target.value)}
                             className="w-10 h-10 text-center border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-primary-500 focus:border-primary-500"
-                            aria-label={`Mapping for ${co.id} to ${outcome.id}`}
                           />
                         </td>
                       ))}
@@ -394,9 +439,7 @@ const ArticulationMatrixPage = () => {
                         </td>
                       );
                     })}
-                    <td className="px-3 py-4">
-                      {/* Empty cell for actions column */}
-                    </td>
+                    <td className="px-3 py-4"></td>
                   </tr>
                 </tfoot>
               </table>
@@ -409,7 +452,7 @@ const ArticulationMatrixPage = () => {
           </>
           ) : (
             <div className="text-center py-10 text-gray-500 dark:text-gray-400">
-                Please select a course to view its articulation matrix, or contact your admin if no courses are assigned to you.
+                Please select a course to view its articulation matrix.
             </div>
           )}
         </CardContent>

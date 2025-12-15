@@ -157,7 +157,6 @@
       "semester": 1,
       "credits": 4,
       "departmentId": "D01",
-      "assignedFacultyId": "U003",
       "cos": [
         {
           "id": "CO1",
@@ -203,7 +202,11 @@
           "coDistribution": {
             "CO1": 15,
             "CO2": 15
-          }
+          },
+          "type": "Internal Assessment",
+          "subType": "1",
+          "customName": "",
+          "linkedAssessment": ""
         },
         {
           "id": "2",
@@ -213,7 +216,11 @@
           "coDistribution": {
             "CO3": 15,
             "CO4": 15
-          }
+          },
+          "type": "Internal Assessment",
+          "subType": "2",
+          "customName": "",
+          "linkedAssessment": ""
         },
         {
           "id": "3",
@@ -223,9 +230,53 @@
           "coDistribution": {
             "CO1": 5,
             "CO2": 5
+          },
+          "type": "Assignment",
+          "subType": "1",
+          "customName": "",
+          "linkedAssessment": ""
+        },
+        {
+          "id": "1765559823313",
+          "name": "Internal Assessment 3",
+          "type": "Internal Assessment",
+          "subType": "3",
+          "customName": "",
+          "linkedAssessment": "",
+          "maxMarks": 30,
+          "weightage": 0,
+          "coDistribution": {
+            "CO4": 12,
+            "CO5": 18
           }
+        },
+        {
+          "id": "1765560601064",
+          "name": "Improvement Test",
+          "type": "Improvement Test",
+          "subType": "Other",
+          "customName": "",
+          "linkedAssessment": "",
+          "maxMarks": 30,
+          "weightage": 0,
+          "coDistribution": {}
         }
-      ]
+      ],
+      "assignedFaculties": [
+        {
+          "facultyId": "U008",
+          "role": "Lecturer"
+        },
+        {
+          "facultyId": "U004",
+          "role": "Lecturer"
+        },
+        {
+          "facultyId": "U003",
+          "role": "Lecturer"
+        }
+      ],
+      "assignedFacultyId": null
     },
     {
       "id": "C102",
@@ -234,7 +285,17 @@
       "semester": 1,
       "credits": 4,
       "departmentId": "D01",
-      "assignedFacultyId": "U003"
+      "assignedFacultyId": null,
+      "assignedFaculties": [
+        {
+          "facultyId": "U003",
+          "role": "Course Coordinator"
+        },
+        {
+          "facultyId": "U004",
+          "role": "Lecturer"
+        }
+      ]
     },
     {
       "id": "C001",
@@ -252,7 +313,17 @@
       "semester": 2,
       "credits": 3,
       "departmentId": "D01",
-      "assignedFacultyId": "U006"
+      "assignedFacultyId": null,
+      "assignedFaculties": [
+        {
+          "facultyId": "U006",
+          "role": "Course Coordinator"
+        },
+        {
+          "facultyId": "U003",
+          "role": "Lecturer"
+        }
+      ]
     },
     {
       "id": "C003",
@@ -534,7 +605,9 @@
       "assessment": "Internal Assessment 1",
       "scores": {
         "Part A": 12,
-        "Part B": 10
+        "Part B": 10,
+        "CO1": 12,
+        "CO2": 15
       }
     },
     {
@@ -544,7 +617,9 @@
       "assessment": "Internal Assessment 1",
       "scores": {
         "Part A": 14,
-        "Part B": 13
+        "Part B": 13,
+        "CO1": 15,
+        "CO2": 15
       }
     },
     {
@@ -584,7 +659,9 @@
       "assessment": "Internal Assessment 2",
       "scores": {
         "Part A": 13,
-        "Part B": 11
+        "Part B": 11,
+        "CO3": 11,
+        "CO4": 10
       }
     },
     {
@@ -1029,7 +1106,9 @@
       "assessment": "Internal Assessment 3",
       "scores": {
         "Part A": 11,
-        "Part B": 13
+        "Part B": 13,
+        "CO4": 12,
+        "CO5": 18
       }
     },
     {
@@ -1146,6 +1225,28 @@
       "scores": {
         "external": 81
       }
+    },
+    {
+      "id": "M_C101_S101_ImprovementTest",
+      "studentId": "S101",
+      "courseId": "C101",
+      "assessment": "Improvement Test",
+      "scores": {
+        "CO1": 15,
+        "CO2": 15
+      },
+      "improvementTarget": "Internal Assessment 1"
+    },
+    {
+      "id": "M_C101_S102_ImprovementTest",
+      "studentId": "S102",
+      "courseId": "C101",
+      "assessment": "Improvement Test",
+      "scores": {
+        "CO1": 7,
+        "CO2": 8
+      },
+      "improvementTarget": "Internal Assessment 1"
     }
   ],
   "pos": [
