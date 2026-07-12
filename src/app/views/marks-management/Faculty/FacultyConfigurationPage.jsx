@@ -4,10 +4,50 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../sh
 import { Icons } from '../shared/icons';
 import { useAuth } from '../../../contexts/AuthContext';
 import api from '../../../services/api';
-import { X, AlertCircle, CheckCircle } from 'lucide-react'; // Added Icons for Modal
+import { X, AlertCircle, CheckCircle, Upload, FileText, Eye } from 'lucide-react'; 
 
 const TOOL_TYPES = ['Internal Assessment', 'Assignment', 'Semester End Exam', 'Activity', 'Improvement Test'];
 const SUB_TYPES = ['1', '2', '3', 'Other'];
+
+// --- PDF PREVIEW MODAL (New) ---
+const PdfPreviewModal = ({ isOpen, onClose, fileData, fileName }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden">
+                {/* Header */}
+                <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800">
+                     <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-primary-600" /> 
+                        <span className="truncate max-w-md">{fileName || "Question Paper Preview"}</span>
+                    </h3>
+                    <button 
+                        onClick={onClose} 
+                        className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors text-gray-500 dark:text-gray-400"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+                {/* Body - PDF Iframe */}
+                <div className="flex-1 bg-gray-100 dark:bg-gray-950 p-1 relative">
+                    {fileData ? (
+                         <iframe 
+                            src={fileData} 
+                            className="w-full h-full rounded border-none bg-white" 
+                            title="Question Paper PDF" 
+                         />
+                    ) : (
+                        <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                            <AlertCircle className="w-10 h-10 mb-2 opacity-50" />
+                            <p>No PDF content available to display.</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // --- CUSTOM MODAL COMPONENT ---
 const CustomModal = ({ isOpen, onClose, config }) => {
@@ -91,6 +131,13 @@ const FacultyConfigurationPage = () => {
         title: '',
         message: '',
         onConfirm: null
+    });
+
+    // --- 4. PDF Preview State (New) ---
+    const [pdfPreview, setPdfPreview] = useState({
+        isOpen: false,
+        data: null,
+        name: ''
     });
 
     const showModal = (type, title, message, onConfirm = null, confirmText = "Confirm", confirmColor = "bg-primary-600") => {
@@ -227,7 +274,9 @@ const FacultyConfigurationPage = () => {
                 linkedAssessment: '',
                 maxMarks: 0, 
                 weightage: 0, 
-                coDistribution: {} 
+                coDistribution: {},
+                questionPaper: null,
+                questionPaperName: ''
             }
         ]);
     };
@@ -250,6 +299,29 @@ const FacultyConfigurationPage = () => {
             t.id !== currentToolId && 
             t.type === 'Internal Assessment'
         );
+    };
+
+    // --- FILE UPLOAD HANDLER ---
+    const handleFileUpload = (toolId, event) => {
+        const file = event.target.files[0];
+        if (file) {
+            if (file.type !== 'application/pdf') {
+                showModal('error', 'Invalid File', 'Please upload a PDF file.');
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setAssessmentTools(tools => tools.map(t => {
+                    if (t.id !== toolId) return t;
+                    return { 
+                        ...t, 
+                        questionPaper: e.target.result, 
+                        questionPaperName: file.name 
+                    };
+                }));
+            };
+            reader.readAsDataURL(file);
+        }
     };
 
     const updateToolMeta = (id, field, value) => {
@@ -325,6 +397,27 @@ const FacultyConfigurationPage = () => {
 
     const updateToolCoDistribution = (toolId, coId, marks) => {
         const markValue = parseInt(marks) || 0;
+
+        // --- VALIDATION: CHECK MAX 2 COs ---
+        const tool = assessmentTools.find(t => t.id === toolId);
+        if (tool) {
+            const currentDist = tool.coDistribution || {};
+            const activeCos = Object.keys(currentDist);
+            const isNewCo = !activeCos.includes(coId);
+
+            // If user is trying to ADD marks (markValue > 0) to a NEW CO, 
+            // and we already have 2 or more COs, prevent it.
+            if (markValue > 0 && isNewCo && activeCos.length >= 2) {
+                showModal(
+                    'error', 
+                    'Limit Reached', 
+                    'You can only link a maximum of 2 COs to a single assessment tool.'
+                );
+                return; // Stop update
+            }
+        }
+        // -----------------------------------
+
         setAssessmentTools(tools => tools.map(t => {
             if (t.id !== toolId) return t;
             
@@ -387,6 +480,14 @@ const FacultyConfigurationPage = () => {
             
             {/* Custom Modal */}
             <CustomModal isOpen={uiModal.isOpen} onClose={closeModal} config={uiModal} />
+            
+            {/* --- PDF PREVIEW MODAL INSTANCE --- */}
+            <PdfPreviewModal 
+                isOpen={pdfPreview.isOpen} 
+                onClose={() => setPdfPreview({ ...pdfPreview, isOpen: false })} 
+                fileData={pdfPreview.data}
+                fileName={pdfPreview.name}
+            />
 
             {/* Header & Course Selector */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -428,6 +529,7 @@ const FacultyConfigurationPage = () => {
                     {/* --- TAB 1: CO MANAGEMENT --- */}
                     {activeTab === 'cos' && (
                         <div className="space-y-6">
+                            {/* ... (CO TABLE CODE REMAINS UNCHANGED) ... */}
                             <Card>
                                 <CardHeader>
                                     <div className="flex justify-between items-center">
@@ -482,6 +584,7 @@ const FacultyConfigurationPage = () => {
                                 </CardContent>
                             </Card>
                             
+                            {/* ... (GLOBAL PARAMS CARD REMAINS UNCHANGED) ... */}
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Global Course Parameters</CardTitle>
@@ -614,6 +717,41 @@ const FacultyConfigurationPage = () => {
                                                                 onChange={(e) => updateToolMeta(tool.id, 'weightage', parseInt(e.target.value))}
                                                                 className="block w-full rounded-md border-primary-300 shadow-sm text-sm font-bold text-primary-700 bg-primary-50 dark:bg-gray-800 dark:border-primary-500 dark:text-white"
                                                             />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Question Paper Upload (Updated to use Modal) */}
+                                                    <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border border-dashed border-gray-300 dark:border-gray-600">
+                                                        <div className="flex justify-between items-center mb-2">
+                                                            <label className="text-[10px] font-bold text-gray-500 uppercase dark:text-gray-400 flex items-center gap-1">
+                                                                <FileText className="w-3 h-3" /> Question Paper
+                                                            </label>
+                                                            {tool.questionPaper && (
+                                                                <button 
+                                                                    onClick={() => setPdfPreview({ 
+                                                                        isOpen: true, 
+                                                                        data: tool.questionPaper, 
+                                                                        name: tool.questionPaperName 
+                                                                    })}
+                                                                    className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                                                                >
+                                                                    <Eye className="w-3 h-3" /> Preview
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                        <div className="relative">
+                                                            <input 
+                                                                type="file" 
+                                                                accept="application/pdf"
+                                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                                onChange={(e) => handleFileUpload(tool.id, e)}
+                                                            />
+                                                            <div className="flex items-center justify-center gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                                                <Upload className="w-4 h-4" />
+                                                                <span className="truncate max-w-[150px]">
+                                                                    {tool.questionPaperName || "Upload PDF"}
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                     </div>
 

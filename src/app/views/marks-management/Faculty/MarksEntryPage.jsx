@@ -3,9 +3,49 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../shared/Card';
 import { useAuth } from 'app/contexts/AuthContext';
 import api from '../../../services/api';
-import { Save, Pencil, Unlock, Check, Download, FileSpreadsheet, TrendingUp } from 'lucide-react';
+import { Save, Pencil, Unlock, Check, Download, FileSpreadsheet, TrendingUp, Eye, FileText, X, AlertCircle } from 'lucide-react'; // Added X, AlertCircle
 
-// --- COMPARISON MODAL (Read Only - Override Removed) ---
+// --- PDF PREVIEW MODAL (New) ---
+const PdfPreviewModal = ({ isOpen, onClose, fileData, fileName }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden">
+                {/* Header */}
+                <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800">
+                     <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-primary-600" /> 
+                        <span className="truncate max-w-md">{fileName || "Question Paper Preview"}</span>
+                    </h3>
+                    <button 
+                        onClick={onClose} 
+                        className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors text-gray-500 dark:text-gray-400"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+                {/* Body - PDF Iframe */}
+                <div className="flex-1 bg-gray-100 dark:bg-gray-950 p-1 relative">
+                    {fileData ? (
+                         <iframe 
+                            src={fileData} 
+                            className="w-full h-full rounded border-none bg-white" 
+                            title="Question Paper PDF" 
+                         />
+                    ) : (
+                        <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                            <AlertCircle className="w-10 h-10 mb-2 opacity-50" />
+                            <p>No PDF content available to display.</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ... (ComparisonModal Code Remains Unchanged) ...
 const ComparisonModal = ({ isOpen, onClose, data }) => {
     if (!isOpen || !data) return null;
 
@@ -78,7 +118,6 @@ const ComparisonModal = ({ isOpen, onClose, data }) => {
     );
 };
 
-
 const MarksEntryPage = () => {
   const { user } = useAuth();
   const [courses, setCourses] = useState([]);
@@ -98,6 +137,13 @@ const MarksEntryPage = () => {
   
   // Modals State
   const [comparisonData, setComparisonData] = useState(null); 
+  
+  // --- PDF Preview State (New) ---
+  const [pdfPreview, setPdfPreview] = useState({
+      isOpen: false,
+      data: null,
+      name: ''
+  });
 
   const fileInputRef = useRef(null);
 
@@ -130,6 +176,11 @@ const MarksEntryPage = () => {
   const internalAssessmentOptions = useMemo(() => {
       return assessmentOptions.filter(t => t.type === 'Internal Assessment').map(t => t.name);
   }, [assessmentOptions]);
+
+  // --- NEW: Get the Full Tool Object for PDF Access ---
+  const selectedTool = useMemo(() => 
+    assessmentOptions.find(t => t.name === selectedAssessmentName), 
+  [assessmentOptions, selectedAssessmentName]);
 
   useEffect(() => {
       if (assessmentOptions.length > 0) {
@@ -465,6 +516,14 @@ const MarksEntryPage = () => {
         onClose={() => setComparisonData(null)}
         data={comparisonData}
       />
+      
+      {/* --- PDF PREVIEW MODAL INSTANCE --- */}
+      <PdfPreviewModal 
+        isOpen={pdfPreview.isOpen}
+        onClose={() => setPdfPreview({ ...pdfPreview, isOpen: false })}
+        fileData={pdfPreview.data}
+        fileName={pdfPreview.name}
+      />
 
       {/* Top Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -557,6 +616,20 @@ const MarksEntryPage = () => {
                         <CardTitle>{selectedCourse.code} - {selectedCourse.name}</CardTitle>
                         <CardDescription>Entering marks for: <span className="font-semibold text-primary-600 dark:text-primary-400">{selectedAssessmentName}</span></CardDescription>
                     </div>
+
+                    {/* --- NEW: PREVIEW BUTTON (Updated to use Modal) --- */}
+                    {selectedTool?.questionPaper && (
+                        <button
+                            onClick={() => setPdfPreview({ 
+                                isOpen: true, 
+                                data: selectedTool.questionPaper, 
+                                name: selectedTool.questionPaperName 
+                            })}
+                            className="flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 text-sm font-bold transition-colors shadow-sm dark:bg-indigo-900/20 dark:text-indigo-300 dark:border-indigo-800"
+                        >
+                            <Eye className="w-4 h-4" /> Preview Question Paper
+                        </button>
+                    )}
                 </div>
             </CardHeader>
             <CardContent>
